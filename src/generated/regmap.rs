@@ -109,6 +109,9 @@ pub mod fields {
     pub const AUD_INTF2_DACCOMP: Field = Field { mask: 0x018, shift: 3 };
     pub const AUD_INTF2_ADCCOMP: Field = Field { mask: 0x006, shift: 1 };
     pub const AUD_INTF2_LOOPBACK: Field = Field { mask: 0x001, shift: 0 };
+    pub const CLASSD_CTL1_SPK_OP_EN: Field = Field { mask: 0x0c0, shift: 6 };
+    pub const CLASSD_CTL3_DCGAIN: Field = Field { mask: 0x038, shift: 3 };
+    pub const CLASSD_CTL3_ACGAIN: Field = Field { mask: 0x007, shift: 0 };
     pub const CLOCKING1_ADCDIV: Field = Field { mask: 0x1c0, shift: 6 };
     pub const CLOCKING1_DACDIV: Field = Field { mask: 0x038, shift: 3 };
     pub const CLOCKING1_SYSCLKDIV: Field = Field { mask: 0x006, shift: 1 };
@@ -134,6 +137,13 @@ pub mod fields {
     pub const OUT_VOL_VU: Field = Field { mask: 0x100, shift: 8 };
     pub const OUT_VOL_ZC: Field = Field { mask: 0x080, shift: 7 };
     pub const OUT_VOL_VOL: Field = Field { mask: 0x07f, shift: 0 };
+    pub const PLL_K1_K: Field = Field { mask: 0x0ff, shift: 0 };
+    pub const PLL_K2_K: Field = Field { mask: 0x0ff, shift: 0 };
+    pub const PLL_K3_K: Field = Field { mask: 0x0ff, shift: 0 };
+    pub const PLL_N_OPCLKDIV: Field = Field { mask: 0x1c0, shift: 6 };
+    pub const PLL_N_SDM: Field = Field { mask: 0x020, shift: 5 };
+    pub const PLL_N_PRESCALE: Field = Field { mask: 0x010, shift: 4 };
+    pub const PLL_N_N: Field = Field { mask: 0x00f, shift: 0 };
     pub const PWR_MGMT1_VMIDSEL: Field = Field { mask: 0x180, shift: 7 };
     pub const PWR_MGMT1_VREF: Field = Field { mask: 0x040, shift: 6 };
     pub const PWR_MGMT1_AINL: Field = Field { mask: 0x020, shift: 5 };

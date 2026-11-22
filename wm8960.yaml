@@ -256,31 +256,101 @@ block/WM8960:
       bit_size: 9
       byte_offset: 0x31
       reset: 0b000110111
+      fieldset: CLASSD_CTL1
     - name: CLASSD_CTL3
       description: Class D Control
       bit_size: 9
       byte_offset: 0x33
       reset: 0b010000000
+      fieldset: CLASSD_CTL3
     - name: PLL_N
       description: PLL N
       bit_size: 9
       byte_offset: 0x34
       reset: 0b000001000
-    - name: PLL_K1 
+      fieldset: PLL_N
+    - name: PLL_K1
       description: PLL K
       bit_size: 9
       byte_offset: 0x35
       reset: 0b000110001
+      fieldset: PLL_K1
     - name: PLL_K2
       description: PLL K
       bit_size: 9
       byte_offset: 0x36
       reset: 0b000100110
+      fieldset: PLL_K2
     - name: PLL_K3
       description: PLL K
       bit_size: 9
       byte_offset: 0x37
       reset: 0b011101001
+      fieldset: PLL_K3
+fieldset/CLASSD_CTL1:
+  description: Class D Speaker Output Control
+  bit_size: 9
+  fields:
+    - name: SPK_OP_EN
+      description: Speaker output enable, bit 0 for left and bit 1 for right
+      bit_offset: 6
+      bit_size: 2
+fieldset/CLASSD_CTL3:
+  description: Class D Speaker Boost Control
+  bit_size: 9
+  fields:
+    - name: DCGAIN
+      description: DC speaker boost on both channels
+      bit_offset: 3
+      bit_size: 3
+    - name: ACGAIN
+      description: AC speaker boost on both channels
+      bit_offset: 0
+      bit_size: 3
+fieldset/PLL_N:
+  description: PLL Integer Ratio and Clock Output Control
+  bit_size: 9
+  fields:
+    - name: OPCLKDIV
+      description: SYSCLK divider for the GPIO clock output
+      bit_offset: 6
+      bit_size: 3
+    - name: SDM
+      description: Enable fractional PLL mode
+      bit_offset: 5
+      bit_size: 1
+    - name: PRESCALE
+      description: Divide MCLK by two before the PLL
+      bit_offset: 4
+      bit_size: 1
+    - name: N
+      description: Integer part of the PLL ratio
+      bit_offset: 0
+      bit_size: 4
+fieldset/PLL_K1:
+  description: PLL Fractional Ratio High Byte
+  bit_size: 9
+  fields:
+    - name: K
+      description: Bits 23 through 16 of the fractional PLL ratio
+      bit_offset: 0
+      bit_size: 8
+fieldset/PLL_K2:
+  description: PLL Fractional Ratio Middle Byte
+  bit_size: 9
+  fields:
+    - name: K
+      description: Bits 15 through 8 of the fractional PLL ratio
+      bit_offset: 0
+      bit_size: 8
+fieldset/PLL_K3:
+  description: PLL Fractional Ratio Low Byte
+  bit_size: 9
+  fields:
+    - name: K
+      description: Bits 7 through 0 of the fractional PLL ratio
+      bit_offset: 0
+      bit_size: 8
 fieldset/IN_VOL:
   description: Input Volume Control
   bit_size: 9
