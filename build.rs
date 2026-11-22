@@ -3,7 +3,7 @@ fn main() {}
 
 #[cfg(feature = "codegen")]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    use chiptool::ir::{BlockItemInner, Field, IR};
+    use chiptool::ir::{BitOffset, BlockItemInner, Field, IR};
     use std::{collections::BTreeMap, env, fmt::Write as _, fs, io, path::PathBuf};
 
     const REGISTER_COUNT: usize = 56;
@@ -22,23 +22,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut output = String::from("// @generated from wm8960.yaml by build.rs; do not edit.\n");
     output.push_str("pub mod registers {\n");
-    let mut reset_values = [0; REGISTER_COUNT];
     let mut seen = [false; REGISTER_COUNT];
     for item in block.items {
-        let BlockItemInner::Register(reg) = item.inner else {
+        let BlockItemInner::Register(_) = item.inner else {
             return Err(format!("Expected a register for {}", item.name).into());
         };
         if item.array.is_some() {
             return Err(format!("Unsupported register array {}", item.name).into());
         }
         let addr = usize::try_from(item.byte_offset)?;
-        if addr >= REGISTER_COUNT || seen[addr] || reg.reset >= (1 << REGISTER_BITS) {
-            return Err(
-                format!("Invalid address or reset value for register {}", item.name).into(),
-            );
+        if addr >= REGISTER_COUNT || seen[addr] {
+            return Err(format!("Invalid address value for register {}", item.name).into());
         }
         seen[addr] = true;
-        reset_values[addr] = reg.reset;
         let prefix = if item.name.starts_with(|c: char| c.is_ascii_digit()) {
             "_"
         } else {
@@ -63,26 +59,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             if array.is_some() {
                 return Err(format!("Unsupported field array {name}.{field}").into());
             }
+            let BitOffset::Regular(bit_offset) = bit_offset else {
+                return Err(format!("Unsupported split bit field {name}.{field}").into());
+            };
             if bit_size == 0 || bit_size > REGISTER_BITS || bit_offset > REGISTER_BITS - bit_size {
                 return Err(format!("Invalid bit range for {name}.{field}").into());
             }
             let mask = ((1u16 << bit_size) - 1) << bit_offset;
-            writeln!(output, "    pub const {name}_{field}: Field = Field {{ mask: {mask:#05x}, shift: {bit_offset} }};")?;
+            writeln!(
+                output,
+                "    pub const {name}_{field}: Field = Field {{ mask: {mask:#05x}, shift: {bit_offset} }};"
+            )?;
         }
     }
-    writeln!(
-        output,
-        "}}\n\npub(super) const RESET_VALUES: [u16; {REGISTER_COUNT}] = ["
-    )?;
-    for chunk in reset_values.chunks(8) {
-        output.push_str("    ");
-        for value in chunk {
-            write!(output, "{value:#05x}, ")?;
-        }
-        output.pop();
-        output.push('\n');
-    }
-    output.push_str("];\n");
+
+    writeln!(output, "}}\n\n")?;
 
     fs::write(out_dir.join("regmap.rs"), &output)?;
     match fs::read(&checked_in) {

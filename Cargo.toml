@@ -16,9 +16,6 @@ license = "MIT OR Apache-2.0"
 # Regenerate the register map from wm8960.yaml at build time (see build.rs)
 codegen = ["dep:chiptool", "dep:serde_yaml"]
 
-[dependencies]
-embedded-hal = "1.0"
-
 [build-dependencies]
-chiptool = { git = "https://github.com/SpinFast/chiptool", rev = "3a644f620bc70f443bdabe58e0ec18e71eb92cd0", optional = true }
+chiptool = { git = "https://github.com/embassy-rs/chiptool", rev = "f93815b3481d839471cd671407dbb1884ae29c88", optional = true }
 serde_yaml = { version = "0.8", optional = true }

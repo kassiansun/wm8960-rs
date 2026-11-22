@@ -1,79 +1,66 @@
 ---
 block/WM8960:
   description: WM8960 Registers
-  address_size: 7
   items:
     - name: LIN_VOL
       description: Left Input Volume
       bit_size: 9
       byte_offset: 0x00
-      reset: 0b010010111
       fieldset: IN_VOL
     - name: RIN_VOL
       description: Right Input Volume
       bit_size: 9
       byte_offset: 0x01
-      reset: 0b010010111
       fieldset: IN_VOL
     - name: LOUT1_VOL
       description: Left Output Volume
       bit_size: 9
       byte_offset: 0x02
-      reset: 0b000000000
       fieldset: OUT_VOL
     - name: ROUT1_VOL
       description: Right Output Volume
       bit_size: 9
       byte_offset: 0x03
-      reset: 0b000000000
       fieldset: OUT_VOL
     - name: CLOCKING1
       description: Clocking
       bit_size: 9
       byte_offset: 0x04
-      reset: 0b000000000
       fieldset: CLOCKING1
     - name: ADAC_CTL1
       description: ADC & DAC Control
       bit_size: 9
       byte_offset: 0x05
-      reset: 0b000001000
       fieldset: ADAC_CTL1
     - name: ADAC_CTL2
       description: ADC & DAC Control
       bit_size: 9
       byte_offset: 0x06
-      reset: 0b000000000
       fieldset: ADAC_CTL2
     - name: AUD_INTF1
       description: Audio Interface
       bit_size: 9
       byte_offset: 0x07
-      reset: 0b000000000
       fieldset: AUD_INTF1
     - name: CLOCKING2
       description: Clocking
       bit_size: 9
       byte_offset: 0x08
-      reset: 0b111000000
       fieldset: CLOCKING2
     - name: AUD_INTF2
       description: Audio Interface
       bit_size: 9
       byte_offset: 0x09
-      reset: 0b000000000
       fieldset: AUD_INTF2
     - name: LDAC_VOL
       description: Left DAC Volume
       bit_size: 9
       byte_offset: 0x0a
-      reset: 0b011111111
       fieldset: ADAC_VOL
     - name: RDAC_VOL
       description: Right DAC Volume
       bit_size: 9
       byte_offset: 0x0b
-      reset: 0b011111111
       fieldset: ADAC_VOL
     - name: RESET
       description: Reset
@@ -83,209 +70,174 @@ block/WM8960:
       description: 3D Control
       bit_size: 9
       byte_offset: 0x10
-      reset: 0b000000000
       fieldset: X3D_CTL
     - name: ALC1
-      description: Automatic Level Control 
+      description: Automatic Level Control
       bit_size: 9
       byte_offset: 0x11
-      reset: 0b001111011
       fieldset: ALC1
     - name: ALC2
-      description: Automatic Level Control 
+      description: Automatic Level Control
       bit_size: 9
       byte_offset: 0x12
-      reset: 0b100000000
       fieldset: ALC2
     - name: ALC3
-      description: Automatic Level Control 
+      description: Automatic Level Control
       bit_size: 9
       byte_offset: 0x13
-      reset: 0b000110010
       fieldset: ALC3
     - name: NOISE_GATE
       description: Noise Gate
       byte_offset: 0x14
-      reset: 0b000000000
       fieldset: NOISE_GATE
     - name: LADC_VOL
       description: Left ADC Volume
       bit_size: 9
       byte_offset: 0x15
-      reset: 0b011000011
       fieldset: ADAC_VOL
     - name: RADC_VOL
       description: Right ADC Volume
       bit_size: 9
       byte_offset: 0x16
-      reset: 0b011000011
       fieldset: ADAC_VOL
     - name: ADDTL_CTL1
       description: Additional Control
       bit_size: 9
       byte_offset: 0x17
-      reset: 0b111000000
       fieldset: ADDTL_CTL1
     - name: ADDTL_CTL2
       description: Additional Control
       bit_size: 9
       byte_offset: 0x18
-      reset: 0b000000000
       fieldset: ADDTL_CTL2
     - name: PWR_MGMT1
       description: Power Management
       bit_size: 9
       byte_offset: 0x19
-      reset: 0b000000000
       fieldset: PWR_MGMT1
     - name: PWR_MGMT2
       description: Power Management
       bit_size: 9
       byte_offset: 0x1a
-      reset: 0b000000000
       fieldset: PWR_MGMT2
     - name: ADDTL_CTL3
       description: Additional Control
       bit_size: 9
       byte_offset: 0x1b
-      reset: 0b000000000
       fieldset: ADDTL_CTL3
     - name: ANTI_POP1
       description: Anti-pop
       bit_size: 9
       byte_offset: 0x1c
-      reset: 0b000000000
       fieldset: ANTI_POP1
     - name: ANTI_POP2
       description: Anti-pop
       bit_size: 9
       byte_offset: 0x1d
-      reset: 0b000000000
       fieldset: ANTI_POP2
     - name: ADCL_SIGPATH
       description: ADCL Signal Path
       bit_size: 9
       byte_offset: 0x20
-      reset: 0b100000000
       fieldset: ADC_SIGPATH
     - name: ADCR_SIGPATH
       description: ADCR Signal Path
       bit_size: 9
       byte_offset: 0x21
-      reset: 0b100000000
       fieldset: ADC_SIGPATH
     - name: LOUT_MIX
       description: Left Out Mix
       bit_size: 9
       byte_offset: 0x22
-      reset: 0b001010000
       fieldset: LROUT_MIX
     - name: ROUT_MIX
       description: Right Out Mix
       bit_size: 9
       byte_offset: 0x25
-      reset: 0b001010000
       fieldset: LROUT_MIX
     - name: MOUT_MIX1
       description: Mono Out Mix
       bit_size: 9
       byte_offset: 0x26
-      reset: 0b000000000
       fieldset: MOUT_MIX1
     - name: MOUT_MIX2
       description: Mono Out Mix
       bit_size: 9
       byte_offset: 0x27
-      reset: 0b000000000
       fieldset: MOUT_MIX2
     - name: LSPKR_VOL
       description: Left Speaker Out Volume
       bit_size: 9
       byte_offset: 0x28
-      reset: 0b000000000
       fieldset: OUT_VOL
     - name: RSPKR_VOL
       description: Right Speaker Out Volume
       bit_size: 9
       byte_offset: 0x29
-      reset: 0b000000000
       fieldset: OUT_VOL
     - name: MOUT_VOL
       description: Mono Out Volume
       bit_size: 9
       byte_offset: 0x2a
-      reset: 0b001000000
       fieldset: MOUT_VOL
     - name: LIN_BOOST_MIX
       description: Left Input Boost Mixer
       bit_size: 9
       byte_offset: 0x2b
-      reset: 0b000000000
       fieldset: IN_BOOST_MIX
     - name: RIN_BOOST_MIX
       description: Right Input Boost Mixer
       bit_size: 9
       byte_offset: 0x2c
-      reset: 0b000000000
       fieldset: IN_BOOST_MIX
     - name: LBYPASS
       description: Left Bypass
       bit_size: 9
       byte_offset: 0x2d
-      reset: 0b001010000
       fieldset: IN_BYPASS
     - name: RBYPASS
       description: Right Bypass
       bit_size: 9
       byte_offset: 0x2e
-      reset: 0b001010000
       fieldset: IN_BYPASS
     - name: PWR_MGMT3
       description: Power Management
       bit_size: 9
       byte_offset: 0x2f
-      reset: 0b000000000
       fieldset: PWR_MGMT3
     - name: ADDTL_CTL4
       description: Additional Control
       bit_size: 9
       byte_offset: 0x30
-      reset: 0b000000010
     - name: CLASSD_CTL1
       description: Class D Control
       bit_size: 9
       byte_offset: 0x31
-      reset: 0b000110111
       fieldset: CLASSD_CTL1
     - name: CLASSD_CTL3
       description: Class D Control
       bit_size: 9
       byte_offset: 0x33
-      reset: 0b010000000
       fieldset: CLASSD_CTL3
     - name: PLL_N
       description: PLL N
       bit_size: 9
       byte_offset: 0x34
-      reset: 0b000001000
       fieldset: PLL_N
     - name: PLL_K1
       description: PLL K
       bit_size: 9
       byte_offset: 0x35
-      reset: 0b000110001
       fieldset: PLL_K1
     - name: PLL_K2
       description: PLL K
       bit_size: 9
       byte_offset: 0x36
-      reset: 0b000100110
       fieldset: PLL_K2
     - name: PLL_K3
       description: PLL K
       bit_size: 9
       byte_offset: 0x37
-      reset: 0b011101001
       fieldset: PLL_K3
 fieldset/CLASSD_CTL1:
   description: Class D Speaker Output Control
@@ -370,7 +322,7 @@ fieldset/IN_VOL:
     - name: VOL
       description: Input Volume Control, 0b111111 = +30dB, 0b000000 = -17.25 dB, 0.75dB per step
       bit_offset: 0
-      bit_size: 6 
+      bit_size: 6
 fieldset/OUT_VOL:
   description: Output Volume Control
   bit_size: 9
@@ -831,4 +783,3 @@ fieldset/PWR_MGMT3:
       description: Right Output Mixer Enable
       bit_offset: 2
       bit_size: 1
-  

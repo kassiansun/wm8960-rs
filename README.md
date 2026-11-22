@@ -21,7 +21,7 @@ Writes made outside the driver do not update its register cache.
 ## Regenerating the register map
 
 After editing [wm8960.yaml](wm8960.yaml), run `cargo build --features codegen`.
-The build script uses chiptool's register model to generate public register
-addresses and typed fields, with private reset values. It automatically refreshes
+The build script uses Embassy chiptool's register model to generate public
+register addresses and typed fields. It automatically refreshes
 [src/generated/regmap.rs](src/generated/regmap.rs) for plain `cargo build`.
 Commit the generated changes along with the YAML changes.
