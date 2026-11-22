@@ -1,10 +1,10 @@
 [package]
 name = "wm8960"
 authors = ["spinfast <spinfast@tutanota.com>"]
-version = "0.1.2"
-edition = "2021"
+version = "0.2.0"
+edition = "2024"
 description = """
-Register map and embedded-hal based driver for Wolfson WM8960 Audio Codec.
+Embedded-hal based driver for the Wolfson WM8960 Audio Codec.
 """
 readme = "README.md"
 repository = "https://github.com/imxrt-rs/wm8960-rs"
@@ -13,23 +13,12 @@ categories = ["embedded", "no-std"]
 license = "MIT OR Apache-2.0"
 
 [features]
-default = ["eh02"] 
-eh02 = ["dep:eh02"]
-eh10 = ["dep:eh10"]
+# Regenerate the register map from wm8960.yaml at build time (see build.rs)
+codegen = ["dep:chiptool", "dep:serde_yaml"]
+
+[dependencies]
+embedded-hal = "1.0"
 
 [build-dependencies]
-serde_yaml = "0.8"
-proc-macro2 = "1.0"
-regex = "1.5"
-
-[dependencies.eh02]
-package = "embedded-hal"
-version = "0.2"
-optional = true
-
-[dependencies.eh10]
-package = "embedded-hal"
-version = "1.0.0-rc.2"
-optional = true
-
-
+chiptool = { git = "https://github.com/SpinFast/chiptool", rev = "3a644f620bc70f443bdabe58e0ec18e71eb92cd0", optional = true }
+serde_yaml = { version = "0.8", optional = true }

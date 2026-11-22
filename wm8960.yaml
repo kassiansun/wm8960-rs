@@ -323,7 +323,7 @@ fieldset/CLOCKING1:
   fields:
     - name: ADCDIV
       description: ADC Sample rate divider, 0b000 = 1, 0b111 = 6, 0.5 per step
-      bit_offset: 5
+      bit_offset: 6
       bit_size: 3
     - name: DACDIV
       description: DAC Sample rate divider, 0b000 = 1, 0b111 = 6, 0.5 per step
@@ -419,21 +419,21 @@ fieldset/CLOCKING2:
   fields:
     - name: DCLKDIV
       description: Class D Switching Clock Divider
-      bit_offset: 5
+      bit_offset: 6
       bit_size: 3
     - name: BCLKDIV
       description: BCLK Divider
       bit_offset: 0
-      bit_size: 3
+      bit_size: 4
 fieldset/AUD_INTF2:
   description: Audio Interface
   bit_size: 9
   fields:
     - name: ALRCGPIO
-      bit_offset: 5
+      bit_offset: 6
       bit_size: 1
     - name: WL8
-      bit_offset: 4
+      bit_offset: 5
       bit_size: 1
     - name: DACCOMP
       bit_offset: 3

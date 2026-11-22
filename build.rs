@@ -1,87 +1,98 @@
-use std::io;
-
-
+#[cfg(not(feature = "codegen"))]
+fn main() {}
 
 #[cfg(feature = "codegen")]
-fn main() -> io::Result<()> {
-    use std::fs;
-    use std::path::PathBuf;
-    use std::str::FromStr;
-    use std::env;
-    use regex::Regex;
-    use proc_macro2::TokenStream;
-    use chiptool::{generate, ir, transform, generate::CommonModule};
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    use chiptool::ir::{BlockItemInner, Field, IR};
+    use std::{collections::BTreeMap, env, fmt::Write as _, fs, io, path::PathBuf};
 
+    const REGISTER_COUNT: usize = 56;
+    const REGISTER_BITS: u32 = 9;
+    const INPUT: &str = "wm8960.yaml";
+    let manifest_dir = PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").unwrap());
     let out_dir = PathBuf::from(env::var_os("OUT_DIR").unwrap());
-    let yaml_path = PathBuf::from("wm8960.yaml");
+    let checked_in = manifest_dir.join("src/generated/regmap.rs");
 
-    let mut regmap_out_path = PathBuf::from(&out_dir);
-    regmap_out_path.push("regmap.rs");
+    println!("cargo:rerun-if-changed={INPUT}");
+    println!("cargo:rerun-if-changed={}", checked_in.display());
 
-    let mut reset_out_path = PathBuf::from(&out_dir);
-    reset_out_path.push("reset.rs");
+    let mut map: IR = serde_yaml::from_slice(&fs::read(manifest_dir.join(INPUT))?)?;
+    let mut block = map.blocks.remove("WM8960").ok_or("Missing block/WM8960")?;
+    block.items.sort_by_key(|item| item.byte_offset);
 
-    fs::write(
-        out_dir.join("common.rs"),
-        chiptool::generate::iface::COMMON_MODULE,
-    )?;
-
-    let data = fs::read(yaml_path.clone())?;
-    println!("decoding yaml");
-    let mut ir: ir::IR = serde_yaml::from_slice(&data).unwrap();
-    println!("read in yaml");
-    transform::Sanitize {}.run(&mut ir).unwrap();
-
-    transform::sort::Sort {}.run(&mut ir).unwrap();
-
-    let gen_opts = generate::Options {
-        common_module: CommonModule::External(TokenStream::from_str("crate::common").unwrap()),
-    };
-
-    let mut tmp = String::new();
-    tmp += "pub(crate) const RESET: [u16; 56] = [\n";
-
-    ir.blocks.iter().for_each(|(_block_key, block_item)| {
-        let mut i = 0;
-        for reg in block_item.items.iter() {
-            let byte_offset = reg.byte_offset;
-            while i < byte_offset {
-                tmp += "0,\n";
-                i += 1;
-            }
-            if let chiptool::ir::BlockItemInner::Register(ref reg) = reg.inner {
-                println!("reset value at offset {} is {:x}", byte_offset, reg.reset);
-                tmp += &format!("0b{:b},\n", reg.reset);
-                i += 1;
-            }
+    let mut output = String::from("// @generated from wm8960.yaml by build.rs; do not edit.\n");
+    output.push_str("pub mod registers {\n");
+    let mut reset_values = [0; REGISTER_COUNT];
+    let mut seen = [false; REGISTER_COUNT];
+    for item in block.items {
+        let BlockItemInner::Register(reg) = item.inner else {
+            return Err(format!("Expected a register for {}", item.name).into());
+        };
+        if item.array.is_some() {
+            return Err(format!("Unsupported register array {}", item.name).into());
         }
-    });
+        let addr = usize::try_from(item.byte_offset)?;
+        if addr >= REGISTER_COUNT || seen[addr] || reg.reset >= (1 << REGISTER_BITS) {
+            return Err(
+                format!("Invalid address or reset value for register {}", item.name).into(),
+            );
+        }
+        seen[addr] = true;
+        reset_values[addr] = reg.reset;
+        let prefix = if item.name.starts_with(|c: char| c.is_ascii_digit()) {
+            "_"
+        } else {
+            ""
+        };
+        writeln!(
+            output,
+            "    pub const {prefix}{}: u8 = {addr:#04x};",
+            item.name
+        )?;
+    }
+    output.push_str("}\n\npub mod fields {\n    use crate::Field;\n\n");
+    for (name, fieldset) in map.fieldsets.into_iter().collect::<BTreeMap<_, _>>() {
+        for field in fieldset.fields {
+            let Field {
+                name: field,
+                bit_offset,
+                bit_size,
+                array,
+                ..
+            } = field;
+            if array.is_some() {
+                return Err(format!("Unsupported field array {name}.{field}").into());
+            }
+            if bit_size == 0 || bit_size > REGISTER_BITS || bit_offset > REGISTER_BITS - bit_size {
+                return Err(format!("Invalid bit range for {name}.{field}").into());
+            }
+            let mask = ((1u16 << bit_size) - 1) << bit_offset;
+            writeln!(output, "    pub const {name}_{field}: Field = Field {{ mask: {mask:#05x}, shift: {bit_offset} }};")?;
+        }
+    }
+    writeln!(
+        output,
+        "}}\n\npub(super) const RESET_VALUES: [u16; {REGISTER_COUNT}] = ["
+    )?;
+    for chunk in reset_values.chunks(8) {
+        output.push_str("    ");
+        for value in chunk {
+            write!(output, "{value:#05x}, ")?;
+        }
+        output.pop();
+        output.push('\n');
+    }
+    output.push_str("];\n");
 
-    tmp += "];";
-
-    let ts = TokenStream::from_str(&tmp).unwrap();
-    fs::write(reset_out_path, ts.to_string())?;
-
-    let data = generate::iface::render(&ir, &gen_opts).unwrap().to_string();
-
-    // Some sane newline additions
-    let data = data.replace("] ", "]\n");
-
-    // Replace inner attributes (not allowed)
-    let data = Regex::new("# *! *\\[.*\\]").unwrap().replace_all(&data, "");
-
-    println!("generating {:?} from {:?}", &regmap_out_path, yaml_path);
-    fs::write(&regmap_out_path, data.to_string())?;
-
-    println!("cargo:rerun-if-changed=build.rs");
-    println!("cargo:rerun-if-changed=src/common.rs");
-    println!("cargo:rerun-if-changed=wm8960.yaml");
-    println!("cargo:rerun-if-changed={}", yaml_path.display());
-
-    Ok(())
-}
-
-#[cfg(not(feature = "codegen"))]
-fn main() -> io::Result<()> {
+    fs::write(out_dir.join("regmap.rs"), &output)?;
+    match fs::read(&checked_in) {
+        Ok(current) if current == output.as_bytes() => {}
+        Ok(_) => fs::write(&checked_in, &output)?,
+        Err(err) if err.kind() == io::ErrorKind::NotFound => {
+            fs::create_dir_all(checked_in.parent().unwrap())?;
+            fs::write(&checked_in, &output)?;
+        }
+        Err(err) => return Err(err.into()),
+    }
     Ok(())
 }

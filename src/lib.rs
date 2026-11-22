@@ -1,42 +1,57 @@
 #![no_std]
 
-pub mod common;
-pub mod regmap;
+mod regmap;
 
-#[cfg(feature = "eh02")]
-use eh02::blocking::i2c;
+use embedded_hal::i2c::I2c;
+use registers::*;
+use regmap::{fields::*, RESET_VALUES};
 
+/// Raw 7-bit register addresses, distinct from the codec's I2C device address.
+pub use regmap::registers;
+
+/// Shared I2C constants and typed descriptors for every register field in `wm8960.yaml`.
+///
+/// Descriptors are named `FIELDSET_FIELD` and apply to the unpacked 9-bit register value.
+///
+/// ```
+/// use wm8960::{common, registers};
+///
+/// let bytes = [0x1e, 0x01];
+/// let word = u16::from_be_bytes(bytes);
+/// let register = ((word & common::WM8960_ADDR_MASK) >> 9) as u8;
+/// let value = word & common::WM8960_REG_MASK;
+/// assert_eq!((register, value), (registers::RESET, 1));
+/// ```
+///
+/// ```
+/// use wm8960::common::{Field, ANTI_POP1_POBCTRL};
+///
+/// let field: Field = ANTI_POP1_POBCTRL;
+/// let mut value = 0x008;
+/// value = (value & !field.mask) | ((1 << field.shift) & field.mask);
+/// assert_eq!(value, 0x088);
+/// ```
+pub mod common {
+    pub use crate::regmap::fields::*;
+    pub use crate::{Field, WM8960_ADDR, WM8960_ADDR_MASK, WM8960_REG_MASK};
+}
+
+/// The codec's 7-bit I2C device address.
 pub const WM8960_ADDR: usize = 0x1a;
+/// The 9-bit register value mask in a packed I2C write word.
 pub const WM8960_REG_MASK: u16 = 0x01FF;
+/// The register address mask in a packed I2C write word, before shifting right by 9.
 pub const WM8960_ADDR_MASK: u16 = !WM8960_REG_MASK;
 
 const WM8960_PLL_N_MIN_VALUE: u32 = 6;
 const WM8960_PLL_N_MAX_VALUE: u32 = 12;
 
-struct RegIface<I2C> {
-    i2c: I2C,
-    regs: [u16; 56],
-}
-
-impl<I2C, V, E> common::Interface<u8, V> for RegIface<I2C>
-where
-    I2C: i2c::Write<Error = E>,
-    E: core::fmt::Debug,
-    V: core::convert::Into<u16> + core::convert::From<u16>,
-{
-    type Error = E;
-    fn read(&mut self, addr: u8) -> Result<V, Self::Error> {
-        Ok(self.regs[addr as usize].into())
-    }
-
-    fn write(&mut self, addr: u8, value: V) -> Result<(), Self::Error> {
-        let v: u16 = value.into();
-        let write_buf: [u8; 2] = [addr << 1 | (v >> 8) as u8 & 0x01, (v & 0xFF) as u8];
-
-        self.i2c.write(WM8960_ADDR as u8, &write_buf)?;
-        self.regs[addr as usize] = v & WM8960_REG_MASK;
-        Ok(())
-    }
+/// A bit field within an unpacked 9-bit register value.
+pub struct Field {
+    /// Bit mask in its register position.
+    pub mask: u16,
+    /// Bit offset of the field from the least significant bit.
+    pub shift: u8,
 }
 
 #[derive(Copy, Clone)]
@@ -97,58 +112,71 @@ pub struct Config {
 
 /// A driver for the WM8960 Codec
 pub struct WM8960<I2C> {
-    iface: RegIface<I2C>,
+    i2c: I2C,
+    regs: [u16; RESET_VALUES.len()],
 }
 
-impl<I2C, E> WM8960<I2C>
-where
-    I2C: i2c::Write<Error = E>,
-    E: core::fmt::Debug,
-{
+impl<I2C: I2c> WM8960<I2C> {
+    fn write_register(&mut self, addr: u8, value: u16) -> Result<(), I2C::Error> {
+        let value = value & WM8960_REG_MASK;
+        let bytes = ((u16::from(addr) << 9) | value).to_be_bytes();
+        self.i2c.write(WM8960_ADDR as u8, &bytes)?;
+        self.regs[usize::from(addr)] = value;
+        Ok(())
+    }
+
+    fn update_register(&mut self, addr: u8, fields: &[(Field, u16)]) -> Result<(), I2C::Error> {
+        // The codec does not support reading registers over I2C.
+        let mut value = self.regs[usize::from(addr)];
+        for (field, bits) in fields {
+            value = (value & !field.mask) | ((bits << field.shift) & field.mask);
+        }
+        self.write_register(addr, value)
+    }
+
     /// Setup a new WM8960 and initialize it
-    pub fn new(i2c: I2C, cfg: &Config) -> Result<Self, E> {
-        let mut iface = RegIface {
+    pub fn new(i2c: I2C, cfg: &Config) -> Result<Self, I2C::Error> {
+        let mut s = Self {
             i2c,
-            regs: regmap::RESET,
+            regs: RESET_VALUES,
         };
-        let mut regmap = regmap::Wm8960 {
-            iface: &mut iface,
-            addr: 0,
-        };
-        regmap.reset().write_value(1)?;
+        s.write_register(RESET, 1)?;
 
-        regmap.pwr_mgmt1().modify(|pwr1| {
-            pwr1.set_vmidsel(0b01); // 50k
-            pwr1.set_vref(true);
-            pwr1.set_ainl(true);
-            pwr1.set_ainr(true);
-            pwr1.set_adcl(true);
-            pwr1.set_adcr(true);
-            pwr1.set_micb(true);
-        })?;
-
-        regmap.pwr_mgmt2().modify(|pwr2| {
-            pwr2.set_dacr(true);
-            pwr2.set_dacl(true);
-            pwr2.set_lout1(true);
-            pwr2.set_rout1(true);
-            pwr2.set_spkr(true);
-            pwr2.set_spkl(true);
-        })?;
-
-        regmap.pwr_mgmt3().modify(|pwr3| {
-            pwr3.set_romix(true);
-            pwr3.set_lomix(true);
-            pwr3.set_lmic(true);
-            pwr3.set_rmic(true);
-        })?;
+        s.update_register(
+            PWR_MGMT1,
+            &[
+                (PWR_MGMT1_VMIDSEL, 0b01), // 50k
+                (PWR_MGMT1_VREF, 1),
+                (PWR_MGMT1_AINL, 1),
+                (PWR_MGMT1_AINR, 1),
+                (PWR_MGMT1_ADCL, 1),
+                (PWR_MGMT1_ADCR, 1),
+                (PWR_MGMT1_MICB, 1),
+            ],
+        )?;
+        s.update_register(
+            PWR_MGMT2,
+            &[
+                (PWR_MGMT2_DACR, 1),
+                (PWR_MGMT2_DACL, 1),
+                (PWR_MGMT2_LOUT1, 1),
+                (PWR_MGMT2_ROUT1, 1),
+                (PWR_MGMT2_SPKR, 1),
+                (PWR_MGMT2_SPKL, 1),
+            ],
+        )?;
+        s.update_register(
+            PWR_MGMT3,
+            &[
+                (PWR_MGMT3_ROMIX, 1),
+                (PWR_MGMT3_LOMIX, 1),
+                (PWR_MGMT3_LMIC, 1),
+                (PWR_MGMT3_RMIC, 1),
+            ],
+        )?;
 
         //TODO adc/dac same clock, verify
-        regmap.aud_intf2().write_value(regmap::AudIntf2(0x40))?;
-
-        drop(regmap);
-
-        let mut s = Self { iface };
+        s.write_register(AUD_INTF2, 0x40)?;
 
         s.set_route(cfg.route)?;
         s.set_protocol(cfg.protocol)?;
@@ -172,30 +200,19 @@ where
         }
         s.set_master(cfg.master)?;
 
-        let mut regmap = regmap::Wm8960 {
-            iface: &mut s.iface,
-            addr: 0,
-        };
-        regmap.addtl_ctl1().write_value(regmap::AddtlCtl1(0x0C0))?;
-        regmap.addtl_ctl4().write_value(0x40)?;
-        regmap.lbypass().write_value(regmap::InBypass(0x0))?;
-        regmap.rbypass().write_value(regmap::InBypass(0x0))?;
-        regmap.ladc_vol().write_value(regmap::AdacVol(0x1c3))?;
-        regmap.radc_vol().write_value(regmap::AdacVol(0x1c3))?;
-        regmap.ldac_vol().write_value(regmap::AdacVol(0x1e0))?;
-        regmap.rdac_vol().write_value(regmap::AdacVol(0x1e0))?;
-        regmap.lout1_vol().write_value(regmap::OutVol(0x16f))?;
-        regmap.rout1_vol().write_value(regmap::OutVol(0x16f))?;
-        regmap.lspkr_vol().write_value(regmap::OutVol(0x1ff))?;
-        regmap.rspkr_vol().write_value(regmap::OutVol(0x1ff))?;
-        //regmap.classd_ctl1().write_value(0x0f7)?;
-        regmap.adac_ctl1().modify(|ctl| {
-            ctl.set_dacmu(false);
-        })?;
-        //regmap.lin_vol().write_value(0x117)?;
-        //regmap.rin_vol().write_value(0x117)?;
-
-        drop(regmap);
+        s.write_register(ADDTL_CTL1, 0x0c0)?;
+        s.write_register(ADDTL_CTL4, 0x40)?;
+        s.write_register(LBYPASS, 0)?;
+        s.write_register(RBYPASS, 0)?;
+        s.write_register(LADC_VOL, 0x1c3)?;
+        s.write_register(RADC_VOL, 0x1c3)?;
+        s.write_register(LDAC_VOL, 0x1e0)?;
+        s.write_register(RDAC_VOL, 0x1e0)?;
+        s.write_register(LOUT1_VOL, 0x16f)?;
+        s.write_register(ROUT1_VOL, 0x16f)?;
+        s.write_register(LSPKR_VOL, 0x1ff)?;
+        s.write_register(RSPKR_VOL, 0x1ff)?;
+        s.update_register(ADAC_CTL1, &[(ADAC_CTL1_DACMU, 0)])?;
 
         s.set_format(
             sysclk,
@@ -207,35 +224,21 @@ where
     }
 
     /// Set the audio routing option
-    pub fn set_route(&mut self, route: Route) -> Result<(), E> {
-        let mut regmap = regmap::Wm8960 {
-            iface: &mut self.iface,
-            addr: 0,
-        };
-
+    pub fn set_route(&mut self, route: Route) -> Result<(), I2C::Error> {
         match route {
             Route::Bypass => {
                 // Input3 to output mixer, volume 0dB
-                regmap.lout_mix().write_value(regmap::LroutMix(0x80))?;
-                regmap.rout_mix().write_value(regmap::LroutMix(0x80))?;
+                self.write_register(LOUT_MIX, 0x80)?;
+                self.write_register(ROUT_MIX, 0x80)?;
             }
             Route::Playback => {
                 // DAC to output mixer, volume 0dB
-                regmap.lout_mix().write_value(regmap::LroutMix(0x100))?;
-                regmap.rout_mix().write_value(regmap::LroutMix(0x100))?;
+                self.write_register(LOUT_MIX, 0x100)?;
+                self.write_register(ROUT_MIX, 0x100)?;
                 // Power On: DAC, Output Mix, and Line Out
-                regmap.pwr_mgmt2().modify(|pwr| {
-                    pwr.set_dacr(true);
-                    pwr.set_dacr(true);
-                })?;
-                regmap.pwr_mgmt3().modify(|pwr| {
-                    pwr.set_romix(true);
-                    pwr.set_lomix(true);
-                })?;
-                regmap.pwr_mgmt2().modify(|pwr| {
-                    pwr.set_lout1(true);
-                    pwr.set_rout1(true);
-                })?;
+                self.update_register(PWR_MGMT2, &[(PWR_MGMT2_DACR, 1)])?;
+                self.update_register(PWR_MGMT3, &[(PWR_MGMT3_ROMIX, 1), (PWR_MGMT3_LOMIX, 1)])?;
+                self.update_register(PWR_MGMT2, &[(PWR_MGMT2_LOUT1, 1), (PWR_MGMT2_ROUT1, 1)])?;
             }
             _ => {
                 unimplemented!("TODO implement recording routes");
@@ -245,15 +248,8 @@ where
     }
 
     /// Set the audio protocol (i2s, pcm, etc) option
-    pub fn set_protocol(&mut self, protocol: Protocol) -> Result<(), E> {
-        let mut regmap = regmap::Wm8960 {
-            iface: &mut self.iface,
-            addr: 0,
-        };
-        regmap.aud_intf1().modify(|intf| {
-            intf.set_format(protocol as u8);
-        })?;
-        Ok(())
+    pub fn set_protocol(&mut self, protocol: Protocol) -> Result<(), I2C::Error> {
+        self.update_register(AUD_INTF1, &[(AUD_INTF1_FORMAT, protocol as u16)])
     }
 
     /// Update PLL settings given input/output/sample rate/bitwidth settings
@@ -265,23 +261,15 @@ where
         out_mclk: u32,
         _sample_rate: u32,
         _bit_width: u32,
-    ) -> Result<(), E> {
+    ) -> Result<(), I2C::Error> {
         let pll_f2: u32 = out_mclk * 4;
         let mut prescale: u32 = 0;
         let mut div: u32 = 1;
         let mut frac_mode: u32 = 0;
 
-        let mut regmap = regmap::Wm8960 {
-            iface: &mut self.iface,
-            addr: 0,
-        };
         // disable PLL power
-        regmap.pwr_mgmt2().modify(|pwr2| {
-            pwr2.set_pll_en(false);
-        })?;
-        regmap.clocking1().modify(|clk1| {
-            clk1.set_clksel(false);
-        })?;
+        self.update_register(PWR_MGMT2, &[(PWR_MGMT2_PLL_EN, 0)])?;
+        self.update_register(CLOCKING1, &[(CLOCKING1_CLKSEL, 0)])?;
 
         let mut pll_n = pll_f2 / in_mclk;
         if pll_n < WM8960_PLL_N_MIN_VALUE {
@@ -305,29 +293,28 @@ where
             frac_mode = 1;
         }
 
-        regmap
-            .pll_n()
-            .write_value((frac_mode as u16) << 5 | (prescale as u16) << 4 | pll_n as u16 & 0xF)?;
-        regmap.pll_k1().write_value(((pll_k >> 16) & 0xFF) as u16)?;
-        regmap.pll_k2().write_value(((pll_k >> 8) & 0xFF) as u16)?;
-        regmap.pll_k3().write_value((pll_k & 0xFF) as u16)?;
-        regmap.pwr_mgmt2().modify(|pwr2| {
-            pwr2.set_pll_en(true);
-        })?;
-        regmap.clocking1().modify(|clk1| {
-            if div == 1 {
-                clk1.set_sysclkdiv(0);
-            } else {
-                clk1.set_sysclkdiv((div << 1) as u8);
-            }
-            clk1.set_clksel(true);
-        })?;
-
-        Ok(())
+        self.write_register(
+            PLL_N,
+            (frac_mode as u16) << 5 | (prescale as u16) << 4 | pll_n as u16 & 0xf,
+        )?;
+        self.write_register(PLL_K1, ((pll_k >> 16) & 0xff) as u16)?;
+        self.write_register(PLL_K2, ((pll_k >> 8) & 0xff) as u16)?;
+        self.write_register(PLL_K3, (pll_k & 0xff) as u16)?;
+        self.update_register(PWR_MGMT2, &[(PWR_MGMT2_PLL_EN, 1)])?;
+        let sysclk_div = if div == 1 { 0 } else { (div << 1) as u16 };
+        self.update_register(
+            CLOCKING1,
+            &[(CLOCKING1_SYSCLKDIV, sysclk_div), (CLOCKING1_CLKSEL, 1)],
+        )
     }
 
     /// Update master clock settings
-    fn set_master_clock(&mut self, sysclk: u32, sample_rate: u32, bit_width: u32) -> Result<(), E> {
+    fn set_master_clock(
+        &mut self,
+        sysclk: u32,
+        sample_rate: u32,
+        bit_width: u32,
+    ) -> Result<(), I2C::Error> {
         let clock_divider: u32 = (sysclk * 2) / (sample_rate * bit_width * 2);
         let reg_div = match clock_divider {
             2 => 0,
@@ -345,35 +332,21 @@ where
             48 => 12,
             _ => panic!("Invalid bit clock divider {}", clock_divider),
         };
-        let mut regmap = regmap::Wm8960 {
-            iface: &mut self.iface,
-            addr: 0,
-        };
-        regmap.clocking2().modify(|clk2| {
-            clk2.set_bclkdiv(reg_div);
-        })?;
-        Ok(())
+        self.update_register(CLOCKING2, &[(CLOCKING2_BCLKDIV, reg_div)])
     }
 
     /// Set the master/slave flag for the codec
-    fn set_master(&mut self, master: bool) -> Result<(), E> {
-        let mut regmap = regmap::Wm8960 {
-            iface: &mut self.iface,
-            addr: 0,
-        };
-        regmap.aud_intf1().modify(|intf| {
-            intf.set_ms(master);
-        })?;
-        Ok(())
+    fn set_master(&mut self, master: bool) -> Result<(), I2C::Error> {
+        self.update_register(AUD_INTF1, &[(AUD_INTF1_MS, u16::from(master))])
     }
 
     /// Configure the audio format and dac/adc dividers
-    fn set_format(&mut self, sysclk: u32, sample_rate: u32, bit_width: u32) -> Result<(), E> {
-        let mut regmap = regmap::Wm8960 {
-            iface: &mut self.iface,
-            addr: 0,
-        };
-
+    fn set_format(
+        &mut self,
+        sysclk: u32,
+        sample_rate: u32,
+        bit_width: u32,
+    ) -> Result<(), I2C::Error> {
         const DIVS: [u32; 7] = [256, 384, 512, 768, 1024, 1408, 1536];
 
         let mut div_idx: usize = usize::MAX;
@@ -393,10 +366,13 @@ where
         }
 
         /* Compute sample rate divider, dac and adc are the same sample rate */
-        regmap.clocking1().modify(|clk1| {
-            clk1.set_dacdiv(div_idx as u8);
-            clk1.set_adcdiv(div_idx as u8);
-        })?;
+        self.update_register(
+            CLOCKING1,
+            &[
+                (CLOCKING1_DACDIV, div_idx as u16),
+                (CLOCKING1_ADCDIV, div_idx as u16),
+            ],
+        )?;
 
         let wl = match bit_width {
             16 => 0b00,
@@ -406,21 +382,13 @@ where
             _ => panic!("Invalid bit width {}", bit_width),
         };
 
-        regmap.aud_intf1().modify(|intf1| {
-            intf1.set_wl(wl);
-        })?;
-
-        Ok(())
+        self.update_register(AUD_INTF1, &[(AUD_INTF1_WL, wl)])
     }
 
     /// Update the output volume for out1 (line out)
-    pub fn set_out_volume(&mut self, lvol: u16, rvol: u16) -> Result<(), E> {
-        let mut regmap = regmap::Wm8960 {
-            iface: &mut self.iface,
-            addr: 0,
-        };
-        regmap.lout1_vol().modify(|_lvol| lvol as u32)?;
-        regmap.rout1_vol().modify(|_rvol| rvol as u32)?;
-        Ok(())
+    pub fn set_out_volume(&mut self, _lvol: u16, _rvol: u16) -> Result<(), I2C::Error> {
+        // Currently this only rewrites the cached volume; the arguments are unused.
+        self.write_register(LOUT1_VOL, self.regs[usize::from(LOUT1_VOL)])?;
+        self.write_register(ROUT1_VOL, self.regs[usize::from(ROUT1_VOL)])
     }
 }
